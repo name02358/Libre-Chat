@@ -1,11 +1,12 @@
 /* eslint-disable max-len */
 import { z } from 'zod';
 import type { ZodError } from 'zod';
+import type { TModelsConfig } from './types';
 import { EModelEndpoint, eModelEndpointSchema } from './schemas';
 import { fileConfigSchema } from './file-config';
-import { specsConfigSchema } from './models';
+import { specsConfigSchema, TSpecsConfig } from './models';
 import { FileSources } from './types/files';
-import { TModelsConfig } from './types';
+import { MCPServersSchema } from './mcp';
 
 export const defaultSocialLogins = ['google', 'facebook', 'openid', 'github', 'discord'];
 
@@ -209,6 +210,7 @@ export type TAssistantEndpoint = z.infer<typeof assistantEndpointSchema>;
 export const agentsEndpointSChema = baseEndpointSchema.merge(
   z.object({
     /* agents specific */
+    recursionLimit: z.number().optional(),
     disableBuilder: z.boolean().optional(),
     capabilities: z
       .array(z.nativeEnum(AgentCapabilities))
@@ -425,6 +427,87 @@ export enum EImageOutputType {
   JPEG = 'jpeg',
 }
 
+const termsOfServiceSchema = z.object({
+  externalUrl: z.string().optional(),
+  openNewTab: z.boolean().optional(),
+  modalAcceptance: z.boolean().optional(),
+  modalTitle: z.string().optional(),
+  modalContent: z.string().or(z.array(z.string())).optional(),
+});
+
+export type TTermsOfService = z.infer<typeof termsOfServiceSchema>;
+
+export const intefaceSchema = z
+  .object({
+    privacyPolicy: z
+      .object({
+        externalUrl: z.string().optional(),
+        openNewTab: z.boolean().optional(),
+      })
+      .optional(),
+    termsOfService: termsOfServiceSchema.optional(),
+    endpointsMenu: z.boolean().optional(),
+    modelSelect: z.boolean().optional(),
+    parameters: z.boolean().optional(),
+    sidePanel: z.boolean().optional(),
+    multiConvo: z.boolean().optional(),
+    bookmarks: z.boolean().optional(),
+    presets: z.boolean().optional(),
+    prompts: z.boolean().optional(),
+    agents: z.boolean().optional(),
+    temporaryChat: z.boolean().optional(),
+  })
+  .default({
+    endpointsMenu: true,
+    modelSelect: true,
+    parameters: true,
+    sidePanel: true,
+    presets: true,
+    multiConvo: true,
+    bookmarks: true,
+    prompts: true,
+    agents: true,
+    temporaryChat: true,
+  });
+
+export type TInterfaceConfig = z.infer<typeof intefaceSchema>;
+
+export type TStartupConfig = {
+  appTitle: string;
+  socialLogins?: string[];
+  interface?: TInterfaceConfig;
+  discordLoginEnabled: boolean;
+  facebookLoginEnabled: boolean;
+  githubLoginEnabled: boolean;
+  googleLoginEnabled: boolean;
+  openidLoginEnabled: boolean;
+  appleLoginEnabled: boolean;
+  openidLabel: string;
+  openidImageUrl: string;
+  /** LDAP Auth Configuration */
+  ldap?: {
+    /** LDAP enabled */
+    enabled: boolean;
+    /** Whether LDAP uses username vs. email */
+    username?: boolean;
+  };
+  serverDomain: string;
+  emailLoginEnabled: boolean;
+  registrationEnabled: boolean;
+  socialLoginEnabled: boolean;
+  passwordResetEnabled: boolean;
+  emailEnabled: boolean;
+  checkBalance: boolean;
+  showBirthdayIcon: boolean;
+  helpAndFaqURL: string;
+  customFooter?: string;
+  modelSpecs?: TSpecsConfig;
+  sharedLinksEnabled: boolean;
+  publicSharedLinksEnabled: boolean;
+  analyticsGtmId?: string;
+  instanceProjectId: string;
+};
+
 export const configSchema = z.object({
   version: z.string(),
   cache: z.boolean().default(true),
@@ -432,44 +515,8 @@ export const configSchema = z.object({
   imageOutputType: z.nativeEnum(EImageOutputType).default(EImageOutputType.PNG),
   includedTools: z.array(z.string()).optional(),
   filteredTools: z.array(z.string()).optional(),
-  interface: z
-    .object({
-      privacyPolicy: z
-        .object({
-          externalUrl: z.string().optional(),
-          openNewTab: z.boolean().optional(),
-        })
-        .optional(),
-      termsOfService: z
-        .object({
-          externalUrl: z.string().optional(),
-          openNewTab: z.boolean().optional(),
-          modalAcceptance: z.boolean().optional(),
-          modalTitle: z.string().optional(),
-          modalContent: z.string().or(z.array(z.string())).optional(),
-        })
-        .optional(),
-      endpointsMenu: z.boolean().optional(),
-      modelSelect: z.boolean().optional(),
-      parameters: z.boolean().optional(),
-      sidePanel: z.boolean().optional(),
-      multiConvo: z.boolean().optional(),
-      bookmarks: z.boolean().optional(),
-      presets: z.boolean().optional(),
-      prompts: z.boolean().optional(),
-      agents: z.boolean().optional(),
-    })
-    .default({
-      endpointsMenu: true,
-      modelSelect: true,
-      parameters: true,
-      sidePanel: true,
-      presets: true,
-      multiConvo: true,
-      bookmarks: true,
-      prompts: true,
-      agents: true,
-    }),
+  mcpServers: MCPServersSchema.optional(),
+  interface: intefaceSchema,
   fileStrategy: fileSourceSchema.default(FileSources.local),
   actions: z
     .object({
@@ -552,7 +599,6 @@ export const defaultEndpoints: EModelEndpoint[] = [
   EModelEndpoint.azureAssistants,
   EModelEndpoint.azureOpenAI,
   EModelEndpoint.agents,
-  EModelEndpoint.bingAI,
   EModelEndpoint.chatGPTBrowser,
   EModelEndpoint.gptPlugins,
   EModelEndpoint.google,
@@ -567,7 +613,6 @@ export const alternateName = {
   [EModelEndpoint.agents]: 'Agents',
   [EModelEndpoint.azureAssistants]: 'Azure Assistants',
   [EModelEndpoint.azureOpenAI]: 'Azure OpenAI',
-  [EModelEndpoint.bingAI]: 'Bing',
   [EModelEndpoint.chatGPTBrowser]: 'ChatGPT',
   [EModelEndpoint.gptPlugins]: 'Plugins',
   [EModelEndpoint.google]: 'Google',
@@ -654,18 +699,19 @@ export const defaultModels = {
   [EModelEndpoint.assistants]: ['chatgpt-4o-latest', ...sharedOpenAIModels],
   [EModelEndpoint.agents]: sharedOpenAIModels, // TODO: Add agent models (agentsModels)
   [EModelEndpoint.google]: [
-    'gemini-pro',
-    'gemini-pro-vision',
-    'chat-bison',
-    'chat-bison-32k',
-    'codechat-bison',
-    'codechat-bison-32k',
-    'text-bison',
-    'text-bison-32k',
-    'text-unicorn',
-    'code-gecko',
-    'code-bison',
-    'code-bison-32k',
+    // Shared Google Models between Vertex AI & Gen AI
+    // Gemini 2.0 Models
+    'gemini-2.0-flash-001',
+    'gemini-2.0-flash-exp',
+    'gemini-2.0-flash-lite-preview-02-05',
+    'gemini-2.0-pro-exp-02-05',
+    // Gemini 1.5 Models
+    'gemini-1.5-flash-001',
+    'gemini-1.5-flash-002',
+    'gemini-1.5-pro-001',
+    'gemini-1.5-pro-002',
+    // Gemini 1.0 Models
+    'gemini-1.0-pro-001',
   ],
   [EModelEndpoint.anthropic]: sharedAnthropicModels,
   [EModelEndpoint.openAI]: [
@@ -691,7 +737,6 @@ export const initialModelsConfig: TModelsConfig = {
   [EModelEndpoint.agents]: openAIModels, // TODO: Add agent models (agentsModels)
   [EModelEndpoint.gptPlugins]: openAIModels,
   [EModelEndpoint.azureOpenAI]: openAIModels,
-  [EModelEndpoint.bingAI]: ['BingAI', 'Sydney'],
   [EModelEndpoint.chatGPTBrowser]: ['text-davinci-002-render-sha'],
   [EModelEndpoint.google]: defaultModels[EModelEndpoint.google],
   [EModelEndpoint.anthropic]: defaultModels[EModelEndpoint.anthropic],
@@ -700,7 +745,6 @@ export const initialModelsConfig: TModelsConfig = {
 
 export const EndpointURLs: { [key in EModelEndpoint]: string } = {
   [EModelEndpoint.openAI]: `/api/ask/${EModelEndpoint.openAI}`,
-  [EModelEndpoint.bingAI]: `/api/ask/${EModelEndpoint.bingAI}`,
   [EModelEndpoint.google]: `/api/ask/${EModelEndpoint.google}`,
   [EModelEndpoint.custom]: `/api/ask/${EModelEndpoint.custom}`,
   [EModelEndpoint.anthropic]: `/api/ask/${EModelEndpoint.anthropic}`,
@@ -739,6 +783,7 @@ export const supportsBalanceCheck = {
 export const visionModels = [
   'gpt-4o',
   'gpt-4o-mini',
+  'o1',
   'gpt-4-turbo',
   'gpt-4-vision',
   'llava',
@@ -773,7 +818,7 @@ export function validateVisionModel({
     return false;
   }
 
-  if (model === 'gpt-4-turbo-preview') {
+  if (model.includes('gpt-4-turbo-preview') || model.includes('o1-mini')) {
     return false;
   }
 
@@ -975,6 +1020,10 @@ export enum ErrorTypes {
    * Invalid request error, API rejected request
    */
   NO_SYSTEM_MESSAGES = 'no_system_messages',
+  /**
+   * Google provider returned an error
+   */
+  GOOGLE_ERROR = 'google_error',
 }
 
 /**
@@ -1084,9 +1133,9 @@ export enum TTSProviders {
 /** Enum for app-wide constants */
 export enum Constants {
   /** Key for the app's version. */
-  VERSION = 'v0.7.5',
+  VERSION = 'v0.7.6',
   /** Key for the Custom Config's version (librechat.yaml). */
-  CONFIG_VERSION = '1.1.9',
+  CONFIG_VERSION = '1.2.1',
   /** Standard value for the first message's `parentMessageId` value, to indicate no parent exists. */
   NO_PARENT = '00000000-0000-0000-0000-000000000000',
   /** Standard value for the initial conversationId before a request is sent */
@@ -1109,6 +1158,8 @@ export enum Constants {
   MAX_CONVO_STARTERS = 4,
   /** Global/instance Project Name */
   GLOBAL_PROJECT_NAME = 'instance',
+  /** Delimiter for MCP tools */
+  mcp_delimiter = '_mcp_',
 }
 
 export enum LocalStorageKeys {
@@ -1116,8 +1167,6 @@ export enum LocalStorageKeys {
   APP_TITLE = 'appTitle',
   /** Key for the last conversation setup. */
   LAST_CONVO_SETUP = 'lastConversationSetup',
-  /** Key for the last BingAI Settings */
-  LAST_BING = 'lastBingSettings',
   /** Key for the last selected model. */
   LAST_MODEL = 'lastSelectedModel',
   /** Key for the last selected tools. */
@@ -1193,6 +1242,6 @@ export enum SystemCategories {
 export const providerEndpointMap = {
   [EModelEndpoint.openAI]: EModelEndpoint.openAI,
   [EModelEndpoint.bedrock]: EModelEndpoint.bedrock,
-  [EModelEndpoint.azureOpenAI]: EModelEndpoint.openAI,
   [EModelEndpoint.anthropic]: EModelEndpoint.anthropic,
+  [EModelEndpoint.azureOpenAI]: EModelEndpoint.azureOpenAI,
 };

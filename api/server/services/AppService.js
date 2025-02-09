@@ -6,9 +6,11 @@ const loadCustomConfig = require('./Config/loadCustomConfig');
 const handleRateLimits = require('./Config/handleRateLimits');
 const { loadDefaultInterface } = require('./start/interface');
 const { azureConfigSetup } = require('./start/azureOpenAI');
+const { processModelSpecs } = require('./start/modelSpecs');
 const { loadAndFormatTools } = require('./ToolService');
 const { agentsConfigSetup } = require('./start/agents');
 const { initializeRoles } = require('~/models/Role');
+const { getMCPManager } = require('~/config');
 const paths = require('~/config/paths');
 
 /**
@@ -39,10 +41,16 @@ const AppService = async (app) => {
 
   /** @type {Record<string, FunctionTool} */
   const availableTools = loadAndFormatTools({
-    directory: paths.structuredTools,
     adminFilter: filteredTools,
     adminIncluded: includedTools,
+    directory: paths.structuredTools,
   });
+
+  if (config.mcpServers != null) {
+    const mcpManager = await getMCPManager();
+    await mcpManager.initializeMCP(config.mcpServers);
+    await mcpManager.mapAvailableTools(availableTools);
+  }
 
   const socialLogins =
     config?.registration?.socialLogins ?? configDefaults?.registration?.socialLogins;
@@ -115,9 +123,9 @@ const AppService = async (app) => {
 
   app.locals = {
     ...defaultLocals,
-    modelSpecs: config.modelSpecs,
     fileConfig: config?.fileConfig,
     secureImageLinks: config?.secureImageLinks,
+    modelSpecs: processModelSpecs(endpoints, config.modelSpecs),
     ...endpointLocals,
   };
 };
