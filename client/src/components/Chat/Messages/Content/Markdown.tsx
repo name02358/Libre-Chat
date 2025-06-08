@@ -7,6 +7,7 @@ import { useRecoilValue } from 'recoil';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkDirective from 'remark-directive';
+import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import type { Pluggable } from 'unified';
 import {
   useToastContext,
@@ -14,9 +15,12 @@ import {
   CodeBlockProvider,
   useCodeBlockContext,
 } from '~/Providers';
+import { Citation, CompositeCitation, HighlightedText } from '~/components/Web/Citation';
 import { Artifact, artifactPlugin } from '~/components/Artifacts/Artifact';
 import { langSubset, preprocessLaTeX, handleDoubleClick } from '~/utils';
 import CodeBlock from '~/components/Messages/Content/CodeBlock';
+import useHasAccess from '~/hooks/Roles/useHasAccess';
+import { unicodeCitation } from '~/components/Web';
 import { useFileDownload } from '~/data-provider';
 import useLocalize from '~/hooks/useLocalize';
 import store from '~/store';
@@ -28,6 +32,10 @@ type TCodeProps = {
 };
 
 export const code: React.ElementType = memo(({ className, children }: TCodeProps) => {
+  const canRunCode = useHasAccess({
+    permissionType: PermissionTypes.RUN_CODE,
+    permission: Permissions.USE,
+  });
   const match = /language-(\w+)/.exec(className ?? '');
   const lang = match && match[1];
   const isMath = lang === 'math';
@@ -49,7 +57,14 @@ export const code: React.ElementType = memo(({ className, children }: TCodeProps
       </code>
     );
   } else {
-    return <CodeBlock lang={lang ?? 'text'} codeChildren={children} blockIndex={blockIndex} />;
+    return (
+      <CodeBlock
+        lang={lang ?? 'text'}
+        codeChildren={children}
+        blockIndex={blockIndex}
+        allowExecution={canRunCode}
+      />
+    );
   }
 });
 
@@ -137,7 +152,7 @@ export const a: React.ElementType = memo(({ href, children }: TAnchorProps) => {
 
   return (
     <a
-      href={filepath.startsWith('files/') ? `/api/${filepath}` : `/api/files/${filepath}`}
+      href={filepath?.startsWith('files/') ? `/api/${filepath}` : `/api/files/${filepath}`}
       {...props}
     >
       {children}
@@ -153,15 +168,12 @@ export const p: React.ElementType = memo(({ children }: TParagraphProps) => {
   return <p className="mb-2 whitespace-pre-wrap">{children}</p>;
 });
 
-const cursor = ' ';
-
 type TContentProps = {
   content: string;
-  showCursor?: boolean;
   isLatestMessage: boolean;
 };
 
-const Markdown = memo(({ content = '', showCursor, isLatestMessage }: TContentProps) => {
+const Markdown = memo(({ content = '', isLatestMessage }: TContentProps) => {
   const LaTeXParsing = useRecoilValue<boolean>(store.LaTeXParsing);
   const isInitializing = content === '';
 
@@ -174,7 +186,7 @@ const Markdown = memo(({ content = '', showCursor, isLatestMessage }: TContentPr
 
   const rehypePlugins = useMemo(
     () => [
-      [rehypeKatex, { output: 'mathml' }],
+      [rehypeKatex],
       [
         rehypeHighlight,
         {
@@ -187,16 +199,14 @@ const Markdown = memo(({ content = '', showCursor, isLatestMessage }: TContentPr
     [],
   );
 
-  const remarkPlugins: Pluggable[] = useMemo(
-    () => [
-      supersub,
-      remarkGfm,
-      remarkDirective,
-      artifactPlugin,
-      [remarkMath, { singleDollarTextMath: true }],
-    ],
-    [],
-  );
+  const remarkPlugins: Pluggable[] = [
+    supersub,
+    remarkGfm,
+    remarkDirective,
+    artifactPlugin,
+    [remarkMath, { singleDollarTextMath: true }],
+    unicodeCitation,
+  ];
 
   if (isInitializing) {
     return (
@@ -222,12 +232,15 @@ const Markdown = memo(({ content = '', showCursor, isLatestMessage }: TContentPr
               a,
               p,
               artifact: Artifact,
+              citation: Citation,
+              'highlighted-text': HighlightedText,
+              'composite-citation': CompositeCitation,
             } as {
               [nodeType: string]: React.ElementType;
             }
           }
         >
-          {isLatestMessage && (showCursor ?? false) ? currentContent + cursor : currentContent}
+          {currentContent}
         </ReactMarkdown>
       </CodeBlockProvider>
     </ArtifactProvider>

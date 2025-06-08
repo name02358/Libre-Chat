@@ -4,6 +4,7 @@ import typescriptEslintEslintPlugin from '@typescript-eslint/eslint-plugin';
 import { fixupConfigRules, fixupPluginRules } from '@eslint/compat';
 // import perfectionist from 'eslint-plugin-perfectionist';
 import reactHooks from 'eslint-plugin-react-hooks';
+import prettier from 'eslint-plugin-prettier';
 import tsParser from '@typescript-eslint/parser';
 import importPlugin from 'eslint-plugin-import';
 import { FlatCompat } from '@eslint/eslintrc';
@@ -25,6 +26,7 @@ const compat = new FlatCompat({
 export default [
   {
     ignores: [
+      'client/vite.config.ts',
       'client/dist/**/*',
       'client/public/**/*',
       'client/coverage/**/*',
@@ -61,6 +63,7 @@ export default [
       'import/parsers': tsParser,
       i18next,
       // perfectionist,
+      prettier: fixupPluginRules(prettier),
     },
 
     languageOptions: {
@@ -100,6 +103,7 @@ export default [
     },
 
     rules: {
+      'prettier/prettier': 'error',
       'react/react-in-jsx-scope': 'off',
 
       '@typescript-eslint/ban-ts-comment': [
@@ -117,31 +121,14 @@ export default [
       // common rules
       'no-nested-ternary': 'warn',
       'no-constant-binary-expression': 'warn',
-      // Also disable the core no-unused-vars rule globally.
-      'no-unused-vars': 'warn',
-
-      indent: ['error', 2, { SwitchCase: 1 }],
-      'max-len': [
-        'error',
+      'no-unused-vars': [
+        'warn',
         {
-          code: 120,
-          ignoreStrings: true,
-          ignoreTemplateLiterals: true,
-          ignoreComments: true,
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
         },
       ],
-      'linebreak-style': 0,
-      curly: ['error', 'all'],
-      semi: ['error', 'always'],
-      'object-curly-spacing': ['error', 'always'],
-      'no-multiple-empty-lines': [
-        'error',
-        {
-          max: 1,
-        },
-      ],
-      'no-trailing-spaces': 'error',
-      'comma-dangle': ['error', 'always-multiline'],
       'no-console': 'off',
       'import/no-cycle': 'error',
       'import/no-self-import': 'error',
@@ -152,8 +139,6 @@ export default [
       'no-restricted-syntax': 'off',
       'react/prop-types': 'off',
       'react/display-name': 'off',
-      quotes: ['error', 'single'],
-      'key-spacing': ['error', { beforeColon: false, afterColon: true }],
 
       // 'perfectionist/sort-imports': [
       //   'error',
@@ -201,14 +186,16 @@ export default [
     files: ['api/**/*.js', 'config/**/*.js'],
     rules: {
       // API
-      // TODO: maybe later to error.
-      'no-unused-const': 'off',
-      'no-unused-vars': 'off',
       'no-async-promise-executor': 'off',
     },
   },
   {
-    files: ['client/src/**/*.tsx', 'client/src/**/*.ts', 'client/src/**/*.jsx', 'client/src/**/*.js'],
+    files: [
+      'client/src/**/*.tsx',
+      'client/src/**/*.ts',
+      'client/src/**/*.jsx',
+      'client/src/**/*.js',
+    ],
     rules: {
       // Client a11y
       // TODO: maybe later to error.
@@ -219,9 +206,6 @@ export default [
       'jsx-a11y/interactive-supports-focus': 'off',
       'jsx-a11y/no-noninteractive-tabindex': 'off',
       'jsx-a11y/img-redundant-alt': 'off',
-      'jsx-a11y/media-has-caption': 'off',
-      'jsx-a11y/no-autofocus': 'off',
-      'jsx-a11y/alt-text': 'off',
     },
   },
   {
@@ -288,25 +272,33 @@ export default [
     rules: {
       // i18n
       'i18next/no-literal-string': [
-        'error', {
+        'error',
+        {
           mode: 'jsx-text-only',
           'should-validate-template': true,
-        }],
+        },
+      ],
       //
       '@typescript-eslint/no-unused-expressions': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unnecessary-condition': 'off',
       '@typescript-eslint/strict-boolean-expressions': 'off',
       '@typescript-eslint/ban-ts-comment': 'off',
       // React
       'react/no-unknown-property': 'warn',
-      'react-hooks/rules-of-hooks': 'off',
-      'react-hooks/exhaustive-deps': 'off',
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
       // General
       'no-constant-binary-expression': 'off',
       'import/no-cycle': 'off',
-      'no-nested-ternary': 'off',
     },
   },
   {
@@ -365,6 +357,18 @@ export default [
       sourceType: 'script',
       parserOptions: {
         project: './packages/mcp/tsconfig.spec.json',
+      },
+    },
+  },
+  {
+    // **New Data-schemas configuration block**
+    files: ['./packages/data-schemas/**/*.ts'],
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      parserOptions: {
+        project: './packages/data-schemas/tsconfig.json',
       },
     },
   },
