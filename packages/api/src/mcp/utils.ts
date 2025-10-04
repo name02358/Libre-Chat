@@ -1,3 +1,6 @@
+import { Constants } from 'librechat-data-provider';
+
+export const mcpToolPattern = new RegExp(`^.+${Constants.mcp_delimiter}.+$`);
 /**
  * Normalizes a server name to match the pattern ^[a-zA-Z0-9_.-]+$
  * This is required for Azure OpenAI models with Tool Calling
@@ -27,4 +30,18 @@ export function normalizeServerName(serverName: string): string {
   }
 
   return normalized;
+}
+
+/**
+ * Sanitizes a URL by removing query parameters to prevent credential leakage in logs.
+ * @param url - The URL to sanitize (string or URL object)
+ * @returns The sanitized URL string without query parameters
+ */
+export function sanitizeUrlForLogging(url: string | URL): string {
+  try {
+    const urlObj = typeof url === 'string' ? new URL(url) : url;
+    return `${urlObj.protocol}//${urlObj.host}${urlObj.pathname}`;
+  } catch {
+    return '[invalid URL]';
+  }
 }

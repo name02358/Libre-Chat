@@ -1,19 +1,15 @@
-import {
-  ErrorTypes,
-  EModelEndpoint,
-  resolveHeaders,
-  mapModelToAzureConfig,
-} from 'librechat-data-provider';
+import { ErrorTypes, EModelEndpoint, mapModelToAzureConfig } from 'librechat-data-provider';
 import type {
-  LLMConfigOptions,
-  UserKeyValues,
   InitializeOpenAIOptionsParams,
   OpenAIOptionsResult,
+  OpenAIConfigOptions,
+  UserKeyValues,
 } from '~/types';
 import { createHandleLLMNewToken } from '~/utils/generators';
 import { getAzureCredentials } from '~/utils/azure';
 import { isUserProvided } from '~/utils/common';
-import { getOpenAIConfig } from './llm';
+import { resolveHeaders } from '~/utils/env';
+import { getOpenAIConfig } from './config';
 
 /**
  * Initializes OpenAI options for agent usage. This function always returns configuration
@@ -25,6 +21,7 @@ import { getOpenAIConfig } from './llm';
  */
 export const initializeOpenAI = async ({
   req,
+  appConfig,
   overrideModel,
   endpointOption,
   overrideEndpoint,
@@ -68,14 +65,14 @@ export const initializeOpenAI = async ({
     ? userValues?.baseURL
     : baseURLOptions[endpoint as keyof typeof baseURLOptions];
 
-  const clientOptions: LLMConfigOptions = {
+  const clientOptions: OpenAIConfigOptions = {
     proxy: PROXY ?? undefined,
     reverseProxyUrl: baseURL || undefined,
     streaming: true,
   };
 
   const isAzureOpenAI = endpoint === EModelEndpoint.azureOpenAI;
-  const azureConfig = isAzureOpenAI && req.app.locals[EModelEndpoint.azureOpenAI];
+  const azureConfig = isAzureOpenAI && appConfig.endpoints?.[EModelEndpoint.azureOpenAI];
 
   if (isAzureOpenAI && azureConfig) {
     const { modelGroupMap, groupMap } = azureConfig;
@@ -91,7 +88,10 @@ export const initializeOpenAI = async ({
     });
 
     clientOptions.reverseProxyUrl = configBaseURL ?? clientOptions.reverseProxyUrl;
-    clientOptions.headers = resolveHeaders({ ...headers, ...(clientOptions.headers ?? {}) });
+    clientOptions.headers = resolveHeaders({
+      headers: { ...headers, ...(clientOptions.headers ?? {}) },
+      user: req.user,
+    });
 
     const groupName = modelGroupMap[modelName || '']?.group;
     if (groupName && groupMap[groupName]) {
@@ -115,7 +115,7 @@ export const initializeOpenAI = async ({
   } else if (isAzureOpenAI) {
     clientOptions.azure =
       userProvidesKey && userValues?.apiKey ? JSON.parse(userValues.apiKey) : getAzureCredentials();
-    apiKey = clientOptions.azure?.azureOpenAIApiKey;
+    apiKey = clientOptions.azure ? clientOptions.azure.azureOpenAIApiKey : undefined;
   }
 
   if (userProvidesKey && !apiKey) {
@@ -136,15 +136,15 @@ export const initializeOpenAI = async ({
     user: req.user.id,
   };
 
-  const finalClientOptions: LLMConfigOptions = {
+  const finalClientOptions: OpenAIConfigOptions = {
     ...clientOptions,
     modelOptions,
   };
 
   const options = getOpenAIConfig(apiKey, finalClientOptions, endpoint);
 
-  const openAIConfig = req.app.locals[EModelEndpoint.openAI];
-  const allConfig = req.app.locals.all;
+  const openAIConfig = appConfig.endpoints?.[EModelEndpoint.openAI];
+  const allConfig = appConfig.endpoints?.all;
   const azureRate = modelName?.includes('gpt-4') ? 30 : 17;
 
   let streamRate: number | undefined;

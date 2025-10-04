@@ -1,8 +1,8 @@
-import { FlowStateManager } from './manager';
 import { Keyv } from 'keyv';
+import { FlowStateManager } from './manager';
 import type { FlowState } from './types';
 
-// Create a mock class without extending Keyv
+/** Mock class without extending Keyv */
 class MockKeyv {
   private store: Map<string, FlowState<string>>;
 
@@ -148,5 +148,37 @@ describe('FlowStateManager', () => {
 
       await expect(flowPromise).rejects.toThrow('failure');
     }, 15000);
+  });
+
+  describe('deleteFlow', () => {
+    const flowId = 'test-flow-123';
+    const type = 'test-type';
+    const flowKey = `${type}:${flowId}`;
+
+    it('deletes an existing flow', async () => {
+      await store.set(flowKey, { type, status: 'PENDING', metadata: {}, createdAt: Date.now() });
+      expect(await store.get(flowKey)).toBeDefined();
+
+      const result = await flowManager.deleteFlow(flowId, type);
+
+      expect(result).toBe(true);
+      expect(await store.get(flowKey)).toBeUndefined();
+    });
+
+    it('returns false if the deletion errors', async () => {
+      jest.spyOn(store, 'delete').mockRejectedValue(new Error('Deletion failed'));
+
+      const result = await flowManager.deleteFlow(flowId, type);
+
+      expect(result).toBe(false);
+    });
+
+    it('does nothing if the flow does not exist', async () => {
+      expect(await store.get(flowKey)).toBeUndefined();
+
+      const result = await flowManager.deleteFlow(flowId, type);
+
+      expect(result).toBe(true);
+    });
   });
 });
